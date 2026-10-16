@@ -7,7 +7,7 @@
 Input: one address per line, or any CSV (the first address on each line is used).
 Output CSV: email,domain,gateway,kind,mx. Zero dependencies, Python 3.8+.
 """
-import argparse, asyncio, collections, csv, random, re, socket, struct, sys, time
+import argparse, asyncio, collections, csv, json, random, re, socket, struct, sys, time
 
 # Alternating operators, so the retry always lands on a different one. Quad9 is left out on purpose:
 # 9.9.9.9 answers NXDOMAIN for threat-listed domains, and 9.9.9.10 throttles bulk runs.
@@ -78,6 +78,7 @@ for _line in VENDORS.strip().splitlines():
     _kind, _label = _head.split(" ", 1)
     SUFFIX.update((k, (_label, _kind)) for k in _keys.split())
 
+FIELDS = ("email", "gateway", "kind", "mx")                    # mx = the host that decided the label
 RANK = {"seg": 0, "mailbox": 1, "forwarder": 2, "retired": 3, "custom": 4, "none": 5}
 EMAIL = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@([^\s,;:<>\"'()\[\]@]+)")
 EDNS = b"\x00" + struct.pack(">HHIH", 41, 1232, 0, 0)          # OPT record: 1232-byte UDP answers
@@ -98,12 +99,12 @@ def vendor(host):
 
 
 def classify(mx):
-    """[(preference, host)] -> (label, kind). Mail goes to the lowest preference; on a tie, a gateway wins."""
+    """[(preference, host)] -> (label, kind, deciding host). Mail goes to the lowest preference; a gateway wins ties."""
     mx = [(p, h) for p, h in mx if not h.endswith("mx-verification.google.com")]   # Workspace ownership token
     if not mx:
-        return "NoMX", "none"
+        return "NoMX", "none", ""
     top = min(p for p, _ in mx)
-    return min((vendor(h) for p, h in mx if p == top), key=lambda v: RANK[v[1]])
+    return min((vendor(h) + (h,) for p, h in sorted(mx) if p == top), key=lambda v: RANK[v[1]])
 
 
 def norm(domain):
@@ -282,17 +283,21 @@ def main():
         out = sys.stdout
     else:
         out = open(a.output, "w", encoding="utf-8", newline="")
-    w = csv.writer(out, lineterminator="\n")
-    w.writerow(["email", "domain", "gateway", "kind", "mx"])
-    tally = collections.Counter()
+    results, tally = [], collections.Counter()
     for email, d in rows:
         status, recs = res[d] if d else ("invalid", [])
         if status == "ok":
-            label, kind = classify(recs)
+            label, kind, host = classify(recs)
         else:
-            label, kind = {"nx": "NXDOMAIN", "servfail": "SERVFAIL", "timeout": "Timeout"}.get(status, "Invalid"), "none"
-        w.writerow([email, d or "", label, kind, " ".join(f"{p}:{h or '.'}" for p, h in sorted(recs))])
+            label, kind, host = {"nx": "NXDOMAIN", "servfail": "SERVFAIL", "timeout": "Timeout"}.get(status, "Invalid"), "none", ""
+        results.append((email, label, kind, host))
         tally[label] += 1
+    if a.output.lower().endswith(".json"):
+        out.write("[\n" + ",\n".join("  " + json.dumps(dict(zip(FIELDS, r)), ensure_ascii=False) for r in results) + "\n]\n")
+    else:
+        w = csv.writer(out, lineterminator="\n")
+        w.writerow(FIELDS)
+        w.writerows(results)
     out.flush()
 
     print(f"{len(rows)} emails, {len(domains)} domains, {secs:.1f}s ({len(domains) / max(secs, 1e-9):.0f} domains/s)",
