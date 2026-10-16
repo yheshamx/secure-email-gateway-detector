@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Find the email security gateway (or mailbox host) behind every address in a list, from MX records.
 
+    python detect.py emails.txt -o out.json
     python detect.py emails.txt -o out.csv
-    python detect.py < emails.csv > out.csv
 
 Input: one address per line, or any CSV (the first address on each line is used).
-Output CSV: email,domain,gateway,kind,mx. Zero dependencies, Python 3.8+.
+Output: email, gateway, kind, mx per address (JSON array for .json, else CSV). Zero dependencies, Python 3.8+.
 """
 import argparse, asyncio, collections, csv, json, random, re, socket, struct, sys, time
 
@@ -15,41 +15,41 @@ RESOLVERS = ["1.1.1.1", "8.8.8.8", "1.0.0.1", "8.8.4.4"]
 
 # "kind label: suffixes". An MX host takes the label of its longest matching suffix (a full host works too).
 VENDORS = """
-seg Mimecast: mimecast.com mimecast.co.za mimecast-offshore.com
-seg Barracuda: barracudanetworks.com
-seg Proofpoint: pphosted.com gpphosted.com ppe-hosted.com
-seg Cisco: iphmx.com
-seg Trend Micro: tmes.trendmicro.com tmes.trendmicro.eu tmes-anz.trendmicro.com tmes-sg.trendmicro.com tmes-in.trendmicro.com tmes-uae.trendmicro.com tmes-uk.trendmicro.com tmes-ca.trendmicro.com tmes-za.trendmicro.com tmes-id.trendmicro.com tmems-jp.trendmicro.com
-seg Sophos: prod.hydra.sophos.com ctr.sophos.com
-seg Symantec: messagelabs.com
-seg Forcepoint: mailcontrol.com
-seg Hornetsecurity: hornetsecurity.com antispameurope.com vadesecure.com
-seg SpamTitan: spamtitan.com titanhq.com
-seg Trellix: fireeyecloud.com
-seg Cloudflare Email Security: cf-emailsecurity.net mxrecord.io mxrecord.mx
-seg Zix: arsmtp.com
-seg N-able: mtaroutes.com spamexperts.com spamexperts.net spamexperts.eu antispamcloud.com
-seg Libraesva: esvacloud.com
-seg Fortinet: fortimail.com fortimailcloud.com
-seg VIPRE: mailanyone.net mx25.net
-seg Mailprotector: shield.security emailservice.io emailservice.cc emailservice.co
-seg Mesh: emailsecurity.app
-seg MX Guarddog: ik2.com ik2.io ik2.eu junkemailfilter.com junkemailfilter.net junkemailfilter.org
-seg SpamHero: spamhero.com spamhero.net mxthunder.com mxthunder.net
-seg SpamStopsHere: spamh.com
-seg GoSecure: gosecure.net zerospam.ca eprism-cloud.com
-seg Securence: securence.com
-seg MailGuard: mailguard.com.au
-seg EveryCloud: everycloudtech.com
-seg Topsec: topsec.com
-seg Heimdal: heimdalsecurity.com
-seg Mailinblack: mailinblack.com
-seg Altospam: altospam.com altospam.net
-seg MailRoute: mailroute.net mroute.net
-seg Retarus: retarus.com
-seg Trustwave: mailmarshal.cloud
-seg MailChannels: mailchannels.net
-seg Intermedia: mx.o365.serverdata.net
+SEG Mimecast: mimecast.com mimecast.co.za mimecast-offshore.com
+SEG Barracuda: barracudanetworks.com
+SEG Proofpoint: pphosted.com gpphosted.com ppe-hosted.com
+SEG Cisco: iphmx.com
+SEG Trend Micro: tmes.trendmicro.com tmes.trendmicro.eu tmes-anz.trendmicro.com tmes-sg.trendmicro.com tmes-in.trendmicro.com tmes-uae.trendmicro.com tmes-uk.trendmicro.com tmes-ca.trendmicro.com tmes-za.trendmicro.com tmes-id.trendmicro.com tmems-jp.trendmicro.com
+SEG Sophos: prod.hydra.sophos.com ctr.sophos.com
+SEG Symantec: messagelabs.com
+SEG Forcepoint: mailcontrol.com
+SEG Hornetsecurity: hornetsecurity.com antispameurope.com vadesecure.com
+SEG SpamTitan: spamtitan.com titanhq.com
+SEG Trellix: fireeyecloud.com
+SEG Cloudflare Email Security: cf-emailsecurity.net mxrecord.io mxrecord.mx
+SEG Zix: arsmtp.com
+SEG N-able: mtaroutes.com spamexperts.com spamexperts.net spamexperts.eu antispamcloud.com
+SEG Libraesva: esvacloud.com
+SEG Fortinet: fortimail.com fortimailcloud.com
+SEG VIPRE: mailanyone.net mx25.net
+SEG Mailprotector: shield.security emailservice.io emailservice.cc emailservice.co
+SEG Mesh: emailsecurity.app
+SEG MX Guarddog: ik2.com ik2.io ik2.eu junkemailfilter.com junkemailfilter.net junkemailfilter.org
+SEG SpamHero: spamhero.com spamhero.net mxthunder.com mxthunder.net
+SEG SpamStopsHere: spamh.com
+SEG GoSecure: gosecure.net zerospam.ca eprism-cloud.com
+SEG Securence: securence.com
+SEG MailGuard: mailguard.com.au
+SEG EveryCloud: everycloudtech.com
+SEG Topsec: topsec.com
+SEG Heimdal: heimdalsecurity.com
+SEG Mailinblack: mailinblack.com
+SEG Altospam: altospam.com altospam.net
+SEG MailRoute: mailroute.net mroute.net
+SEG Retarus: retarus.com
+SEG Trustwave: mailmarshal.cloud
+SEG MailChannels: mailchannels.net
+SEG Intermedia: mx.o365.serverdata.net
 mailbox Google: google.com googlemail.com smtp.goog
 mailbox Outlook: mail.protection.outlook.com mail.eo.outlook.com olc.protection.outlook.com mx.microsoft mail.protection.office365.us mail.protection.partner.outlook.cn mail.protection.outlook.de pamx1.hotmail.com
 mailbox Zoho: zoho.com zoho.eu zoho.in zoho.com.au zoho.jp zoho.com.cn zohocloud.ca zohomail.com zoho.sa zoho.uk
@@ -79,7 +79,7 @@ for _line in VENDORS.strip().splitlines():
     SUFFIX.update((k, (_label, _kind)) for k in _keys.split())
 
 FIELDS = ("email", "gateway", "kind", "mx")                    # mx = the host that decided the label
-RANK = {"seg": 0, "mailbox": 1, "forwarder": 2, "retired": 3, "custom": 4, "none": 5}
+RANK = {"SEG": 0, "mailbox": 1, "forwarder": 2, "retired": 3, "custom": 4, "none": 5}
 EMAIL = re.compile(r"[\w.!#$%&'*+/=?^`{|}~-]+@([^\s,;:<>\"'()\[\]@]+)")
 EDNS = b"\x00" + struct.pack(">HHIH", 41, 1232, 0, 0)          # OPT record: 1232-byte UDP answers
 

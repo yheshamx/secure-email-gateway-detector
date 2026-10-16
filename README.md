@@ -13,9 +13,9 @@ Find out which email security gateway sits in front of every inbox on your list.
 ```
   your list            MX record (DNS)            result
   ───────────────      ─────────────────────      ─────────────────────
-  a@ibm.com        ──▶ pphosted.com           ──▶ Proofpoint    seg
-  b@chevron.com    ──▶ iphmx.com              ──▶ Cisco         seg
-  c@barracuda.com  ──▶ barracudanetworks.com  ──▶ Barracuda     seg
+  a@ibm.com        ──▶ pphosted.com           ──▶ Proofpoint    SEG
+  b@chevron.com    ──▶ iphmx.com              ──▶ Cisco         SEG
+  c@barracuda.com  ──▶ barracudanetworks.com  ──▶ Barracuda     SEG
   e@gmail.com      ──▶ google.com             ──▶ Google        mailbox
   f@microsoft.com  ──▶ outlook.com            ──▶ Outlook       mailbox
 ```
@@ -34,13 +34,13 @@ Use `-o out.csv` for a spreadsheet instead. The input is one email per line, or 
 
 ```json
 [
-  {"email": "a@ibm.com", "gateway": "Proofpoint", "kind": "seg", "mx": "mx0a-001b2d05.pphosted.com"},
+  {"email": "a@ibm.com", "gateway": "Proofpoint", "kind": "SEG", "mx": "mx0a-001b2d05.pphosted.com"},
   {"email": "e@gmail.com", "gateway": "Google", "kind": "mailbox", "mx": "gmail-smtp-in.l.google.com"}
 ]
 ```
 
 - `gateway`: the vendor, or `Custom` for the company's own mail server
-- `kind`: `seg` (security gateway), `mailbox`, `forwarder`, `retired`, `custom` or `none`
+- `kind`: `SEG` (secure email gateway), `mailbox`, `forwarder`, `retired`, `custom` or `none`
 - `mx`: the mail server that decided the label
 
 If a domain can't take mail, `gateway` says why: `NoMX`, `NoMail`, `NXDOMAIN`, `SERVFAIL`, `Timeout` (run it again) or `Invalid`.
@@ -48,7 +48,7 @@ If a domain can't take mail, `gateway` says why: `NoMX`, `NoMail`, `NXDOMAIN`, `
 ## What it detects
 
 ```
-seg        Mimecast, Barracuda, Proofpoint, Cisco, Sophos, Trend Micro, Symantec,
+SEG        Mimecast, Barracuda, Proofpoint, Cisco, Sophos, Trend Micro, Symantec,
            Forcepoint, Hornetsecurity, Trellix, Fortinet and 24 more
 mailbox    Google, Outlook, Zoho, GoDaddy, Yahoo, iCloud, Proton and 5 more
 forwarder  Cloudflare Email Routing, ImprovMX, Namecheap forwarding and 4 more

@@ -48,7 +48,7 @@ def test_classify():
     ]
     for want, mx in cases:
         assert classify(mx)[0] == want, (want, mx, classify(mx))
-    assert classify([(10, "eu-smtp-inbound-1.mimecast.com")])[1] == "seg"
+    assert classify([(10, "eu-smtp-inbound-1.mimecast.com")])[1] == "SEG"
     assert classify([(1, "aspmx.l.google.com")])[1] == "mailbox"
     assert classify([(10, "mx.example.com")])[1] == "custom"
 
