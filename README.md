@@ -1,4 +1,4 @@
-# sender-email-gateway-detector
+# secure-email-gateway-detector
 
 Find out which email security gateway sits in front of every inbox on your list.
 
