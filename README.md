@@ -1,22 +1,22 @@
 # sender-email-gateway-detector
 
-Give it a list of email addresses. It tells you which email security gateway (Mimecast, Barracuda, Proofpoint, Cisco and 30 more) or mailbox host (Google, Outlook, Zoho and others) receives the mail for each one.
+Give it a list of email addresses. It tells you which email security gateway (Mimecast, Barracuda, Proofpoint, Cisco and 31 more) or mailbox host (Google, Outlook, Zoho and others) sits in front of each inbox. That's the filter your email has to get past when you send to them.
 
-One Python file. Nothing to install. About 2,300 domains a second.
+It's a single Python file with no dependencies. 50,000 domains take about 22 seconds.
 
 ## Run it
 
-```
+```sh
 python detect.py emails.txt -o out.csv
 ```
 
-`emails.txt` can be one address per line or any CSV. It takes the first address on each line, so header rows and extra columns are fine. Leave out `-o` to print to the screen, or pipe the list in: `python detect.py < emails.csv`.
+`emails.txt` can be one address per line or any CSV. It takes the first address on each line, so header rows and extra columns are fine. Lines without an @ are skipped. Leave out `-o` to print to the screen, or pipe the list in: `python detect.py < emails.csv`.
 
-Needs Python 3.8 or newer.
+You need Python 3.8 or newer. No Python on Windows? Run `winget install Python.Python.3.13`, then use `py` instead of `python`.
 
 ## What you get
 
-```
+```csv
 email,domain,gateway,kind,mx
 x@mimecast.com,mimecast.com,Mimecast,seg,10:service-alpha-inbound-a.mimecast.com 10:service-alpha-inbound-b.mimecast.com
 x@barracuda.com,barracuda.com,Barracuda,seg,10:d160221a.ess.barracudanetworks.com 20:d160221b.ess.barracudanetworks.com
@@ -40,7 +40,7 @@ Statuses in the `gateway` column:
 | `NoMail` | The domain publishes a null MX: it takes no mail |
 | `NXDOMAIN` | The domain doesn't exist |
 | `SERVFAIL` | The domain's own DNS is broken |
-| `Timeout` | No DNS answer. Run those rows again |
+| `Timeout` | No DNS answer. Run `detect.py` again on those rows (`out.csv` works as input) |
 | `Invalid` | Not a usable email address |
 
 When it finishes it prints a count per label.
@@ -52,20 +52,22 @@ When it finishes it prints a count per label.
 | seg | Mimecast, Barracuda, Proofpoint, Cisco, Trend Micro, Sophos, Symantec, Forcepoint, Hornetsecurity, SpamTitan, Trellix, Cloudflare Email Security, Zix, N-able, Libraesva, Fortinet, VIPRE, Mailprotector, Mesh, MX Guarddog, SpamHero, SpamStopsHere, GoSecure, Securence, MailGuard, EveryCloud, Topsec, Heimdal, Mailinblack, Altospam, MailRoute, Retarus, Trustwave, MailChannels, Intermedia |
 | mailbox | Google, Outlook, Zoho, GoDaddy, Yahoo, iCloud, Fastmail, Proton, Rackspace, Intermedia, SiteGround, Amazon WorkMail |
 | forwarder | Google Domains forwarding, Cloudflare Email Routing, ImprovMX, Forward Email, Mailgun, Porkbun forwarding, Namecheap forwarding |
-| retired | Postini, McAfee MX Logic, old Trend Micro hosts |
+| retired | Postini (retired), McAfee MX Logic (retired), Trend Micro (retired) |
 
-`Outlook` covers Microsoft 365, Exchange Online and consumer Outlook/Hotmail. The full host list is the `VENDORS` block at the top of `detect.py`. To add a vendor, add a line.
+`Outlook` covers Microsoft 365, Exchange Online and consumer Outlook/Hotmail. Intermedia shows up twice on purpose: its filtering hosts (`mx.o365.serverdata.net`) count as seg, its hosted mailboxes as mailbox.
+
+The full host list is the `VENDORS` block at the top of `detect.py`. To add a vendor, add a line. The one exception is Amazon WorkMail (`inbound-smtp.<region>.amazonaws.com`), which is matched in `vendor()`.
 
 ## How it decides
 
 1. It dedupes domains first, so 100,000 gmail.com addresses cost one lookup.
 2. It asks Cloudflare and Google public DNS for MX records, 1,024 queries at a time. A failed query retries on the other provider, and anything that timed out gets a second, slower pass.
 3. It labels the MX host with the lowest preference number, because that's where senders deliver first. If hosts tie, a security gateway beats a mailbox host.
-4. It matches the end of the hostname, never a substring. `mx.google.com.attacker.net` is Custom, not Google.
+4. It matches the end of the hostname, never a substring. `mx.google.com.attacker.example` is Custom, not Google.
 
 ## Speed
 
-On a Windows 11 laptop on home internet, 50,000 domains from the Tranco top-1M list took 21.9 seconds (about 2,300 domains a second). Your network sets the real limit.
+On a Windows 11 laptop on home internet, 50,000 domains from the Tranco top-1M list took 21.9 seconds (about 2,300 domains a second). Small lists still take about 10 seconds, because the run waits for the slowest DNS servers to answer or time out: 5,000 domains took 10.3 seconds. Your network sets the real limit.
 
 | Option | Default | What it does |
 |---|---|---|
@@ -83,11 +85,11 @@ If your network blocks outside DNS, point `-r` at your own resolver. Quad9 is le
 
 ## Tests
 
-```
+```sh
 python test_detect.py
 ```
 
-Offline, no network needed.
+The tests run offline.
 
 ## Credits
 

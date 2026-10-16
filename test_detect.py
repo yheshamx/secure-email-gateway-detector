@@ -33,8 +33,8 @@ def test_classify():
         ("Sophos", [(0, "x.mail.protection.outlook.com"), (0, "mx-01-eu-west-1.prod.hydra.sophos.com")]),
         # suffix, never substring
         ("Custom", [(10, "mx.barracuda.company.example")]),
-        ("Custom", [(10, "mail.notoutlook.com")]),
-        ("Custom", [(10, "mx.google.com.attacker.net")]),
+        ("Custom", [(10, "mail.notoutlook.example")]),
+        ("Custom", [(10, "mx.google.com.attacker.example")]),
         ("Custom", [(10, "aspmx2.googlemail.com.example.com")]),         # missing trailing dot in the zone file
         ("Custom", [(10, "sxb1plzcpnl1.prod.sxb1.secureserver.net")]),   # GoDaddy web hosting, not GoDaddy mail
         ("Custom", [(10, "feedback-smtp.eu-west-1.amazonses.com")]),
@@ -68,13 +68,13 @@ def test_parse():
 
 
 def test_inputs():
-    lines = ["email,name\n", '"Bob","BOB@Example.COM"\n', "mailto:jo@x.co\n", "bad@\n", "nothing here\n",
-             "﻿ann@müller.de\n"]
+    lines = ["email,name\n", '"Bob","BOB@Example.COM"\n', "mailto:jo@x.example\n", "bad@\n", "nothing here\n",
+             "﻿ann@müller.example\n"]
     got = list(read_emails(lines))
-    assert got == [("BOB@Example.COM", "Example.COM"), ("jo@x.co", "x.co"), ("bad@", None),
-                   ("ann@müller.de", "müller.de")], got
+    assert got == [("BOB@Example.COM", "Example.COM"), ("jo@x.example", "x.example"), ("bad@", None),
+                   ("ann@müller.example", "müller.example")], got
     assert norm("Example.COM.") == "example.com"
-    assert norm("müller.de") == "xn--mller-kva.de"
+    assert norm("müller.example") == "xn--mller-kva.example"
     assert norm("a..b") is None and norm("localhost") is None
 
 
